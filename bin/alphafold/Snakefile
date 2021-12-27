@@ -1,0 +1,253 @@
+localrules: af_patch
+rule af_patch:
+    """
+    Patch alphafold conda env
+    """
+    output:
+        done = af_dir + 'patch.done'
+    params:
+        af_dir = config['pipeline']['script_folder'] + 'alphafold/'
+    conda:
+        '../envs/alphafold.yaml'
+    log:
+        log_dir + 'af_patch/all.log'
+    shell:
+        """
+        ENVDIR=`which python 2> {log}`
+        ENVDIR=`dirname $ENVDIR`
+        ENVDIR=`dirname $ENVDIR`"/lib/python3.8/site-packages/"
+        DONE=$ENVDIR"openmm_patch.done"
+        SRC=$ENVDIR"simtk/openmm/app/topology.py"
+        PATCH={params.af_dir}"docker/openmm.patch"
+        echo "checking for done file: $DONE" >> {log}
+        if [ ! -f $DONE ]; then
+          echo "$DONE does not exist; patching" >> {log}
+          patch -p0 $SRC $PATCH  2>> {log} 1>&2
+        else
+          echo "$DONE exists; skipping the patch" >> {log}
+        fi
+        touch $DONE 2>> {log} 1>&2
+        touch {output.done} 2>> {log} 1>&2
+        """
+
+localrules: af_pip_update
+rule af_pip_update:
+    """
+    Updating via pip
+    """
+    output:
+        done = af_dir + 'pip_update.done'
+    conda:
+        '../envs/alphafold.yaml'
+    log:
+        log_dir + 'af_pip_update/all.log'
+    shell:
+        """
+        JAX=`pip list | grep "jax " | perl -pe 's/.+ +//g'`
+        if [ $JAX != "0.2.25" ]; then
+          echo "Upgrading JAX" > {log}
+          pip install --upgrade jax jaxlib==0.1.69+cuda111 -f https://storage.googleapis.com/jax-releases/jax_releases.html 2>> {log} 1>&2
+          pip install jax==0.2.25 2>> {log} 1>&2
+        else
+          echo "JAX already upgraded; skipping" > {log}
+        fi
+        touch {output.done} 2>> {log} 1>&2
+        """
+        
+def af_databases(wildcards):
+    db_paths = {
+        'uniref90_database_path' : config['databases']['uniref90'],
+        'mgnify_database_path' : config['databases']['mgnify'],
+        'template_mmcif_dir' : config['databases']['template_mmcif'],
+        'obsolete_pdbs_path' : config['databases']['obsolete_pdbs']
+    }
+    # reduced vs full db
+    if config['params']['db_preset'] == 'reduced_dbs':
+        db_paths['small_bfd_database_path'] = config['databases']['small_bfd']    
+    else:
+        db_paths['uniclust30_database_path'] = config['databases']['uniclust30']
+        db_paths['bfd_database_path'] = config['databases']['bfd']
+    # monomer vs multimer
+    if config['params']['model_preset'] == 'multimer':
+        db_paths['uniprot_database_path'] = config['databases']['uniprot']
+        db_paths['pdb_seqres_database_path'] = config['databases']['pdb_seqres']
+    else:
+        db_paths['pdb70_database_path'] = config['databases']['pdb70']
+    # formatting
+    db_paths = ['='.join(['--' + k,v]) for k,v in db_paths.items()]
+    return ' '.join(db_paths)
+
+localrules: af_create_msa
+rule af_create_msa:
+    """
+    Run the MSA generation portion of the alphafold pipeline
+    """
+    input:
+        done1 = af_dir + 'patch.done',
+        done2 = af_dir + 'pip_update.done',
+        faa = lambda wildcards: config['samples'].loc[wildcards.sample,'Fasta']
+    output:
+        u90 = af_dir + '{sample}/msas/uniref90_hits.sto',
+        mgf = af_dir + '{sample}/msas/mgnify_hits.sto'
+    params:
+        exe = config['pipeline']['script_folder'] + 'alphafold/run_alphafold.py',
+        sample = lambda wildcards : wildcards.sample,
+        max_template_date = config['params']['max_template_date'],
+        db_preset = config['params']['db_preset'],
+        model_preset = config['params']['model_preset'],
+        is_prokaryote = config['params']['is_prokaryote'],
+        out_dir = af_dir,
+        data_dir = config['databases']['base_path'],
+        dbs = af_databases
+    threads:
+        4
+    resources:
+        n = lambda wildcards, attempt, threads: threads,
+        time = lambda wildcards, attempt: attempt ** 2 * 60 * 12,
+        mem_gb_pt = lambda wildcards, attempt: attempt * 32
+    conda:
+        '../envs/alphafold.yaml'
+    benchmark:
+        benchmark_dir + 'af_create_msa/{sample}.txt'
+    log:
+        log_dir + 'af_create_msa/{sample}.log'
+    shell:
+        """
+        export CUDA_VISIBLE_DEVICES=0
+        export TF_FORCE_UNIFIED_MEMORY='1'
+        export OPENMM_CPU_THREADS={threads}
+        export XLA_PYTHON_CLIENT_MEM_FRACTION='4.0'
+        
+        HHB=`which hhblits`
+        HHS=`which hhsearch`
+        JACK=`which jackhmmer`
+        KALN=`which kalign`
+        
+        python {params.exe} \
+          --num_cpus {threads} \
+          --fasta_paths={input.faa} \
+          --output_dir={params.out_dir} \
+          --output_prefix="{params.sample}" \
+          --max_template_date="{params.max_template_date}" \
+          --db_preset="{params.db_preset}" \
+          --model_preset="{params.model_preset}" \
+          --benchmark=false \
+          --logtostderr \
+          --use_precomputed_msas=false \
+          --hhblits_binary_path=$HHB \
+          --hhsearch_binary_path=$HHS \
+          --jackhmmer_binary_path=$JACK \
+          --kalign_binary_path=$KALN \
+          --data_dir={params.data_dir} \
+          {params.dbs} \
+          2> {log} 1>&2
+        """
+
+def af_predict_gpu(wildcards):
+    if is_true(config['params']['use_gpu']):
+        return 1
+    else:
+        return 0
+
+def af_predict_time(wildcards, attempt):
+    if is_true(config['params']['use_gpu']):
+        return attempt ** 3 * 59
+    else:
+        return attempt ** 2 * 60 * 12
+
+def af_predict_threads(wildcards, threads):
+    if is_true(config['params']['use_gpu']):
+        return 2
+    else:
+        return threads
+
+def af_predict_mem(wildcards, attempt):
+    if is_true(config['params']['use_gpu']):
+        mem = (attempt * 32) +  128 / 2.0
+    else:
+        mem = attempt * 56 / 8.0
+    return int(round(mem,0))
+    
+rule af_predict:
+    """
+    Predict folding based on pre-computed MSA data
+    """
+    input:
+        faa = lambda wildcards: config['samples'].loc[wildcards.sample,'Fasta'],
+        u90 = af_dir + '{sample}/msas/uniref90_hits.sto',
+        mgf = af_dir + '{sample}/msas/mgnify_hits.sto'
+    output:
+        pkl = af_dir + '{sample}/features.pkl',
+        rnk0 = af_dir + '{sample}/ranked_0.pdb',
+        rnk1 = af_dir + '{sample}/ranked_1.pdb',
+        rnk2 = af_dir + '{sample}/ranked_2.pdb',
+        rnk3 = af_dir + '{sample}/ranked_3.pdb',
+        rnk4 = af_dir + '{sample}/ranked_4.pdb',
+        tim = af_dir + '{sample}/timings.json'
+    params:
+        exe = config['pipeline']['script_folder'] + 'alphafold/run_alphafold.py',
+        sample = lambda wildcards : wildcards.sample,
+        max_template_date = config['params']['max_template_date'],
+        db_preset = config['params']['db_preset'],
+        model_preset = config['params']['model_preset'],
+        is_prokaryote = config['params']['is_prokaryote'],
+        out_dir = af_dir,
+        data_dir = config['databases']['base_path'],
+        dbs = af_databases
+    threads:
+        8
+    resources:
+        n = af_predict_threads,
+        time = af_predict_time,
+        mem_gb_pt = af_predict_mem,
+        gpu = af_predict_gpu
+    conda:
+        '../envs/alphafold.yaml'
+    benchmark:
+        benchmark_dir + 'af_predict/{sample}.txt'
+    log:
+        log_dir + 'af_predict/{sample}.log'
+    shell:
+        """
+        # use gpu?
+        if [ {resources.gpu} -eq 1 ]; then
+          BASE_DIR=/ebio/abt3_projects/software
+          export PATH=$PATH:$BASE_DIR/cuda-11.3/bin
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$BASE_DIR/cuda-drivers
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$BASE_DIR/cuda-11.3/lib64:$BASE_DIR/cuda-drivers
+          echo "# Using GPU" > {log}
+          nvidia-smi >> {log} 2>&1
+          python -c 'import tensorflow as tf; tf.config.list_physical_devices("GPU")' >> {log} 2>&1
+        else
+          echo "# Not using GPU" > {log}
+        fi          
+        #export CUDA_VISIBLE_DEVICES=0
+        export TF_FORCE_UNIFIED_MEMORY='1'
+        export OPENMM_CPU_THREADS={resources.n}
+        export XLA_PYTHON_CLIENT_MEM_FRACTION='4.0'
+        
+        HHB=`which hhblits`
+        HHS=`which hhsearch`
+        JACK=`which jackhmmer`
+        KALN=`which kalign`
+
+        echo "#--- running alphafold ---#" >> {log} 2>&1
+        python {params.exe} \
+          --num_cpus {resources.n} \
+          --fasta_paths={input.faa} \
+          --output_dir={params.out_dir} \
+          --output_prefix="{params.sample}" \
+          --max_template_date="{params.max_template_date}" \
+          --db_preset="{params.db_preset}" \
+          --model_preset="{params.model_preset}" \
+          --benchmark=false \
+          --logtostderr \
+          --use_precomputed_msas=true \
+          --hhblits_binary_path=$HHB \
+          --hhsearch_binary_path=$HHS \
+          --jackhmmer_binary_path=$JACK \
+          --kalign_binary_path=$KALN \
+          --data_dir={params.data_dir} \
+          {params.dbs} \
+          2>> {log} 1>&2
+        """

@@ -1,0 +1,39 @@
+# table with sample --> fasta_file information 
+samples_file: tests/data/n4.tsv
+
+# output location
+output_dir: tests/output/n4/
+
+# temporary file directory (your username will be added automatically)
+tmp_dir: /ebio/abt3_scratch/
+
+# params (change as needed)
+params:
+  ionice: -c 3
+  use_gpu: True
+  max_template_date: "2022-01-01"
+  db_preset: reduced_dbs  #full_dbs
+  model_preset: monomer
+  is_prokaryote: true
+
+# databases
+## all databases should be within the `base_path`
+databases:
+  base_path: /ebio/abt3_projects/databases_no-backup/tmp/alphafold2/data/
+  uniref90: uniref90/uniref90.fasta
+  uniprot: uniprot/uniprot.fasta
+  mgnify: mgnify/mgy_clusters_2018_12.fa
+  bfd: bfd/bfd_metaclust_clu_complete_id30_c90_final_seq.sorted_opt
+  small_bfd: small_bfd/bfd-first_non_consensus_sequences.fasta
+  uniclust30: uniclust30/uniclust30_2018_08/uniclust30_2018_08
+  pdb70: pdb70/pdb70
+  pdb_seqres: pdb_seqres/pdb_seqres.txt
+  template_mmcif: pdb_mmcif/mmcif_files
+  obsolete_pdbs: pdb_mmcif/obsolete.dat
+
+# snakemake pipeline
+pipeline:
+  snakemake_folder: ./
+  script_folder: ./bin/scripts/
+  export_conda: True
+  name: alphafold_sm

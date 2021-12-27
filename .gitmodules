@@ -1,0 +1,7 @@
+[submodule "bin/ll_pipeline_utils"]
+	path = bin/ll_pipeline_utils
+	url = https://github.com/leylabmpi/ll_pipeline_utils.git
+[submodule "bin/scripts/alphafold"]
+	path = bin/scripts/alphafold
+	branch = main
+	url = https://github.com/nick-youngblut/alphafold.git

@@ -1,0 +1,4 @@
+af_dir = os.path.join(config['output_dir'], 'alphafold/')
+
+log_dir = os.path.join(config['output_dir'], 'logs/')
+benchmark_dir = os.path.join(config['output_dir'], 'benchmark/')
