@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .snakemake/
-tests/output*/
+tests/output/
 tmp/
 archive/
 .DS_Store
