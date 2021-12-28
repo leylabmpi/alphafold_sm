@@ -11,15 +11,17 @@ tmp_dir: /ebio/abt3_scratch/
 params:
   ionice: -c 3
   use_gpu: True
+  af_msa_num_cpu: 8
   max_template_date: "2022-01-01"
-  db_preset: reduced_dbs  #full_dbs
+  db_preset: full_dbs #reduced_dbs
   model_preset: monomer
   is_prokaryote: true
 
 # databases
 ## all databases should be within the `base_path`
 databases:
-  base_path: /ebio/abt3_projects/databases_no-backup/tmp/alphafold2/data/
+#  base_path: /ebio/abt3_projects/databases_no-backup/tmp/alphafold2/data/
+  base_path: /ebio/abt3_scratch/alphafold/v2/data/
   uniref90: uniref90/uniref90.fasta
   uniprot: uniprot/uniprot.fasta
   mgnify: mgnify/mgy_clusters_2018_12.fa

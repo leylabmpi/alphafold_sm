@@ -4,6 +4,12 @@ alphafold_sm
 Simple snakemake pipeline for each scaling of
 [AlphaFold2](https://github.com/deepmind/alphafold)
 
+* Version: 0.1.0
+* Authors:
+  * Nick Youngblut <nyoungb2@gmail.com>
+* Maintainers:
+  * Nick Youngblut <nyoungb2@gmail.com>
+
 # Summary
 
 This snakemake pipeline handles the software install and cluster job submission/tracking.
@@ -23,6 +29,10 @@ Alphafold is run as 2 parts:
 To do this, the pipeline utilizes a
 [modified version of alphafold](https://github.com/nick-youngblut/alphafold).
 Only the user interface has been edited, and not how alphafold actually functions.
+
+### Dependencies 
+
+The setup is based upon the [alphafold_non_docker](https://github.com/kalininalab/alphafold_non_docker).
 
 ### Databases
 
@@ -57,7 +67,8 @@ wget -q -P bin/scripts/alphafold/alphafold/common/ https://git.scicore.unibas.ch
 ## Conda
 
 You need a conda environment with [snakemake](https://snakemake.readthedocs.io/en/stable/) installed.
-Make sure to activate you snakemake conda environment.
+
+Be sure to activate you snakemake conda environment!
 
 ## Input
 
@@ -82,8 +93,9 @@ The `config.yaml` file sets the parameters for the pipeline.
 #### Important parameters
 
 * `use_gpu:`
-  * Only used if `cluster=True`, which is set automatically via using `./snakemake_sge.sh` for running the pipeline on the MPI Bio. cluster
-* other params
+  * Only used if `cluster=True`, which is set automatically via using `./snakemake_sge.sh` for running the pipeline on the MPI Bio. cluster.
+  * If `cluster=False` (eg., if a run on a local server) then only CPUs will be used.
+* Other params
   * See the alphafold documentation
 * `databases:`
   * `base_path:`
@@ -98,8 +110,13 @@ The `config.yaml` file sets the parameters for the pipeline.
 * If you delete the `./snakemake/conda/` directory, then BE SURE TO delete the
 `pip_update.done` and `patch.done` files in the output directory, or you have to apply the pip update & patch manually to the alphafold conda environment that snakemake will automatically generate.
 
+## Output
+
+See [the alphafold docs](https://github.com/deepmind/alphafold#alphafold-output)
 
 # TODO
+
+* add seq length calc & resource adjustment
 
 ## tools to add
 * Structure-based calculations
@@ -111,5 +128,6 @@ The `config.yaml` file sets the parameters for the pipeline.
   * [mTM-Align](http://yanglab.nankai.edu.cn/mTM-align)
   * [madoka](http://madoka.denglab.org/)
   * [FATCAT](https://ssbio.readthedocs.io/en/latest/notebooks/FATCAT%20-%20Structure%20Similarity.html)
+  * [bio3d](http://thegrantlab.org/bio3d/articles/online/pdb_vignette/Bio3D_pdb.html)
 * visualization
   * [ipymol](https://github.com/cxhernandez/ipymol)

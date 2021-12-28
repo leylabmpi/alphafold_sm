@@ -77,6 +77,12 @@ def af_databases(wildcards):
     db_paths = ['='.join(['--' + k,v]) for k,v in db_paths.items()]
     return ' '.join(db_paths)
 
+def is_prokaryote(wildcards):
+    if is_true(config['params']['is_prokaryote']):
+        return '--is_prokaryote_list=true'
+    else:
+        return ''
+
 localrules: af_create_msa
 rule af_create_msa:
     """
@@ -95,12 +101,12 @@ rule af_create_msa:
         max_template_date = config['params']['max_template_date'],
         db_preset = config['params']['db_preset'],
         model_preset = config['params']['model_preset'],
-        is_prokaryote = config['params']['is_prokaryote'],
+        is_prok = is_prokaryote,
         out_dir = af_dir,
         data_dir = config['databases']['base_path'],
         dbs = af_databases
     threads:
-        4
+        int(config['params']['af_msa_num_cpu'])
     resources:
         n = lambda wildcards, attempt, threads: threads,
         time = lambda wildcards, attempt: attempt ** 2 * 60 * 12,
@@ -113,7 +119,6 @@ rule af_create_msa:
         log_dir + 'af_create_msa/{sample}.log'
     shell:
         """
-        export CUDA_VISIBLE_DEVICES=0
         export TF_FORCE_UNIFIED_MEMORY='1'
         export OPENMM_CPU_THREADS={threads}
         export XLA_PYTHON_CLIENT_MEM_FRACTION='4.0'
@@ -139,21 +144,57 @@ rule af_create_msa:
           --jackhmmer_binary_path=$JACK \
           --kalign_binary_path=$KALN \
           --data_dir={params.data_dir} \
-          {params.dbs} \
+          {params.dbs} {params.is_prok} \
           2> {log} 1>&2
         """
 
+def _open(infile, mode='rb'):
+    """
+    Openning of input, regardless of compression
+    """
+    if infile.endswith('.bz2'):
+        return bz2.open(infile, mode)
+    elif infile.endswith('.gz'):
+        return gzip.open(infile, mode)
+    else:
+        return open(infile)
+
+def _decode(x):
+    """
+    Decoding input, if needed
+    """
+    try:
+        x = x.decode('utf-8')
+    except AttributeError:
+        pass
+    return x    
+
+def get_seq_len(fasta):
+    seq_len = 0
+    with _open(fasta) as inF:
+        for line in inF:
+            if line.startswith('>'):
+                continue
+            seq_len += len(line.rstrip())
+    return seq_len
+
+def af_predict_time(wildcards, input, attempt):
+    # TODO: change for multimer?
+    if is_true(config['params']['use_gpu']):
+        seq_len = get_seq_len(input.faa)
+        t = seq_len * 0.7103 - 184.15
+        t = t ** (1 + attempt ** 2 / 10.0)
+        t = 59 if t < 59 else t
+        t = 20160 if t > 20160 else t
+        return int(round(t,0))
+    else:
+        return attempt ** 2 * 60 * 24
+        
 def af_predict_gpu(wildcards):
     if is_true(config['params']['use_gpu']):
         return 1
     else:
         return 0
-
-def af_predict_time(wildcards, attempt):
-    if is_true(config['params']['use_gpu']):
-        return attempt ** 3 * 59
-    else:
-        return attempt ** 2 * 60 * 12
 
 def af_predict_threads(wildcards, threads):
     if is_true(config['params']['use_gpu']):
@@ -163,7 +204,7 @@ def af_predict_threads(wildcards, threads):
 
 def af_predict_mem(wildcards, attempt):
     if is_true(config['params']['use_gpu']):
-        mem = (attempt * 32) +  128 / 2.0
+        mem = ((attempt ** 2 * 20) + 130) / 2.0
     else:
         mem = attempt * 56 / 8.0
     return int(round(mem,0))
@@ -190,7 +231,7 @@ rule af_predict:
         max_template_date = config['params']['max_template_date'],
         db_preset = config['params']['db_preset'],
         model_preset = config['params']['model_preset'],
-        is_prokaryote = config['params']['is_prokaryote'],
+        is_prok = is_prokaryote,
         out_dir = af_dir,
         data_dir = config['databases']['base_path'],
         dbs = af_databases
@@ -221,7 +262,6 @@ rule af_predict:
         else
           echo "# Not using GPU" > {log}
         fi          
-        #export CUDA_VISIBLE_DEVICES=0
         export TF_FORCE_UNIFIED_MEMORY='1'
         export OPENMM_CPU_THREADS={resources.n}
         export XLA_PYTHON_CLIENT_MEM_FRACTION='4.0'
@@ -248,6 +288,7 @@ rule af_predict:
           --jackhmmer_binary_path=$JACK \
           --kalign_binary_path=$KALN \
           --data_dir={params.data_dir} \
-          {params.dbs} \
+          {params.dbs} {params.is_prok} \
           2>> {log} 1>&2
+        echo "# alphafold job finished!" >> {log} 2>&1
         """
