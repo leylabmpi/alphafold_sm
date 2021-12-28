@@ -114,11 +114,10 @@ The `config.yaml` file sets the parameters for the pipeline.
 
 See [the alphafold docs](https://github.com/deepmind/alphafold#alphafold-output)
 
+
 # TODO
 
-* add seq length calc & resource adjustment
-
-## tools to add
+## tools to possibly add
 * Structure-based calculations
   * https://github.com/harmslab/pdbtools
   * https://ssbio.readthedocs.io/en/latest/protein.html
