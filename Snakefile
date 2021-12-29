@@ -14,7 +14,10 @@ except ImportError:
 # functions
 def J(*args):
     return os.path.join(*args)
-    
+
+def A(path):
+    return os.path.abspath(path)
+
 # setup
 ## load
 if len(config.keys()) == 0:
@@ -72,8 +75,10 @@ if is_true(config['params']['use_gpu']) and not is_true(config['cluster']):
 ## including modular snakefiles
 include: snake_dir + 'bin/dirs'
 include: snake_dir + 'bin/alphafold/Snakefile'
+include: snake_dir + 'bin/align/Snakefile'
 
 # all rule
+
 def which_all(wildcards):
     F = []
     # predictions
@@ -82,6 +87,13 @@ def which_all(wildcards):
     for i in range(5):
         F += expand(af_dir + '{{sample}}/ranked_{}.pdb'.format(i),
                     sample = config['samples'].Sample)
+    # alignents
+    ## intra
+    if is_true(config['params']['mTM_align']['run_intra']):
+        F.append(af_dir + 'mTM-align/intra/scores.tsv')
+    ## inter
+    if is_true(config['params']['mTM_align']['run_inter']):
+        F.append(af_dir + 'mTM-align/inter/scores.tsv')
     # return
     return F
 

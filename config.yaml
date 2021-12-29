@@ -1,8 +1,8 @@
 # table with sample --> fasta_file information 
-samples_file: tests/data/n4.tsv
+samples_file: tests/data/multi-mcr.tsv
 
 # output location
-output_dir: tests/output/n4/
+output_dir: tests/output/multi-mcr/
 
 # temporary file directory (your username will be added automatically)
 tmp_dir: /ebio/abt3_scratch/
@@ -10,17 +10,19 @@ tmp_dir: /ebio/abt3_scratch/
 # params (change as needed)
 params:
   ionice: -c 3
-  use_gpu: True
+  use_gpu: true
   af_msa_num_cpu: 8
   max_template_date: "2022-01-01"
-  db_preset: full_dbs #reduced_dbs
-  model_preset: monomer
+  db_preset: full_dbs     #reduced_dbs
+  model_preset: multimer  #monomer
   is_prokaryote: true
+  mTM_align:
+    run_intra: true
+    run_inter: true
 
 # databases
 ## all databases should be within the `base_path`
 databases:
-#  base_path: /ebio/abt3_projects/databases_no-backup/tmp/alphafold2/data/
   base_path: /ebio/abt3_scratch/alphafold/v2/data/
   uniref90: uniref90/uniref90.fasta
   uniprot: uniprot/uniprot.fasta

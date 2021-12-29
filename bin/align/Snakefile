@@ -1,0 +1,143 @@
+localrules: mTM_align_intra
+rule mTM_align_intra:
+    """
+    mTM_align to compare ranked models
+    """
+    input:
+        rnk0 = A(af_dir + '{sample}/ranked_0.pdb'),
+        rnkx = A(af_dir + '{sample}/ranked_{rank}.pdb'),
+    output:
+        pdb = A(af_dir + '{sample}/mTM-align/0-{rank}/superimposed.pdb'),
+        tms = A(af_dir + '{sample}/mTM-align/0-{rank}/pairwise_TMscore.txt'),
+        rmsd = A(af_dir + '{sample}/mTM-align/0-{rank}/pairwise_rmsd.txt')
+    params:
+        exe = A(config['pipeline']['script_folder'] + 'mTM-align')
+    log:
+        A(log_dir + 'mTM_align_intra/{sample}/0-{rank}.log')
+    shell:
+        """
+        OUTDIR=`dirname {output.pdb}`
+        cd $OUTDIR 2> {log}
+        echo {input.rnk0} > files.txt
+        echo {input.rnkx} >> files.txt
+        {params.exe} -i files.txt -o {output.pdb} 2>> {log} 1>&2
+        """
+        
+localrules: mTM_align_intra_sum
+rule mTM_align_intra_sum:
+    """
+    mTM_align to compare ranked models: summary
+    """
+    input:
+       tms =  expand(A(af_dir + '{sample}/mTM-align/0-{rank}/pairwise_TMscore.txt'),
+                     rank = [1,2,3,4],
+                     sample = config['samples'].Sample),
+       rmsd = expand(A(af_dir + '{sample}/mTM-align/0-{rank}/pairwise_rmsd.txt'),
+                     rank = [1,2,3,4],
+                     sample = config['samples'].Sample),
+    output:
+        tsv = af_dir + 'mTM-align/intra/scores.tsv'
+    run:
+        import os,re
+        def parse_path(infile):
+            D = os.path.split(infile)[0]
+            D,rank = os.path.split(D)
+            D,_ = os.path.split(D)
+            D,sample = os.path.split(D)
+            rank = rank.split('-')
+            return sample, rank[0], rank[1]
+        def parse_mtx(infile):
+            with open(infile) as inF:
+                for i,line in enumerate(inF):
+                    if i == 1:
+                        return re.split(' +', line.rstrip(' '))[1]
+        with open(output.tsv, 'w') as outF:
+            header = ['Sample', 'Rank_x', 'Rank_y', 'Metric', 'Score']
+            outF.write('\t'.join(header) + '\n')
+            # tms
+            for infile in input.tms:
+                sample, rx, ry = parse_path(infile)
+                score = parse_mtx(infile)
+                line = [sample, rx, ry, 'TMscore', score]
+                outF.write('\t'.join([str(x) for x in line]) + '\n')
+            # rmsd
+            for infile in input.rmsd:
+                sample, rx, ry = parse_path(infile)
+                score = parse_mtx(infile)
+                line = [sample, rx, ry, 'rmsd', score]
+                outF.write('\t'.join([str(x) for x in line]) + '\n')
+
+localrules: mTM_align_inter
+rule mTM_align_inter:
+    """
+    mTM_align to compare top ranked model for each sample
+    """
+    input:
+        rnkx = A(af_dir + '{sample_x}/ranked_0.pdb'),
+        rnky = A(af_dir + '{sample_y}/ranked_0.pdb')
+    output:
+        pdb = A(af_dir + 'mTM-align/inter/{sample_x}/{sample_y}/superimposed.pdb'),
+        tms = A(af_dir + 'mTM-align/inter/{sample_x}/{sample_y}/pairwise_TMscore.txt'),
+        rmsd = A(af_dir + 'mTM-align/inter/{sample_x}/{sample_y}/pairwise_rmsd.txt')
+    params:
+        exe = A(config['pipeline']['script_folder'] + 'mTM-align')
+    log:
+        A(log_dir + 'mTM_align_inter/{sample_x}/{sample_y}.log')
+    shell:
+        """
+        OUTDIR=`dirname {output.pdb}`
+        cd $OUTDIR 2> {log}
+        echo {input.rnkx} > files.txt
+        echo {input.rnky} >> files.txt
+        {params.exe} -i files.txt -o {output.pdb} 2>> {log} 1>&2
+        """
+
+def mTM_align_inter_input(wildcards, filename):
+    F = []
+    p = A(af_dir + 'mTM-align/inter/{sample_x}/{sample_y}/{filename}')
+    for x in config['samples'].Sample:
+        for y in config['samples'].Sample:
+            if x == y:
+                continue
+            F.append(p.format(sample_x = x, sample_y = y, filename = filename))
+    return F
+    
+localrules: mTM_align_inter_sum
+rule mTM_align_inter_sum:
+    """
+    mTM_align to compare ranked models: summary
+    """
+    input:
+       tms =  lambda wildcards: mTM_align_inter_input(wildcards,
+                                                      'pairwise_TMscore.txt'),
+       rmsd = lambda wildcards: mTM_align_inter_input(wildcards,
+                                                      'pairwise_rmsd.txt')
+    output:
+        tsv = af_dir + 'mTM-align/inter/scores.tsv'
+    run:
+        import os,re
+        def parse_path(infile):
+            D = os.path.split(infile)[0]
+            D,sample_y = os.path.split(D)
+            D,sample_x = os.path.split(D)
+            return sample_x, sample_y
+        def parse_mtx(infile):
+            with open(infile) as inF:
+                for i,line in enumerate(inF):
+                    if i == 1:
+                        return re.split(' +', line.rstrip(' '))[1]
+        with open(output.tsv, 'w') as outF:
+            header = ['Sample_x', 'Sample_y', 'Metric', 'Score']
+            outF.write('\t'.join(header) + '\n')
+            # tms
+            for infile in input.tms:
+                sample_x, sample_y = parse_path(infile)
+                score = parse_mtx(infile)
+                line = [sample_x, sample_y, 'TMscore', score]
+                outF.write('\t'.join([str(x) for x in line]) + '\n')
+            # rmsd
+            for infile in input.rmsd:
+                sample_x, sample_y = parse_path(infile)
+                score = parse_mtx(infile)
+                line = [sample_x, sample_y, 'rmsd', score]
+                outF.write('\t'.join([str(x) for x in line]) + '\n')

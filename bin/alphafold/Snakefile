@@ -83,6 +83,12 @@ def is_prokaryote(wildcards):
     else:
         return ''
 
+def af_create_time(wildcards, attempt):
+    if config['params']['db_preset'] == 'full_dbs':
+        return attempt ** 2 * 60 * 12
+    else:
+        return attempt ** 2 * 60 * 8        
+    
 localrules: af_create_msa
 rule af_create_msa:
     """
@@ -94,7 +100,8 @@ rule af_create_msa:
         faa = lambda wildcards: config['samples'].loc[wildcards.sample,'Fasta']
     output:
         u90 = af_dir + '{sample}/msas/uniref90_hits.sto',
-        mgf = af_dir + '{sample}/msas/mgnify_hits.sto'
+        mgf = af_dir + '{sample}/msas/mgnify_hits.sto',
+        jsn = af_dir + '{sample}/msas/chain_id_map.json'
     params:
         exe = config['pipeline']['script_folder'] + 'alphafold/run_alphafold.py',
         sample = lambda wildcards : wildcards.sample,
@@ -109,8 +116,9 @@ rule af_create_msa:
         int(config['params']['af_msa_num_cpu'])
     resources:
         n = lambda wildcards, attempt, threads: threads,
-        time = lambda wildcards, attempt: attempt ** 2 * 60 * 12,
-        mem_gb_pt = lambda wildcards, attempt: attempt * 32
+        time = af_create_time,
+        mem_gb_pt = lambda wildcards, attempt, threads: \
+                    int(round(attempt * 200.0 / threads,0))
     conda:
         '../envs/alphafold.yaml'
     benchmark:
@@ -146,6 +154,7 @@ rule af_create_msa:
           --data_dir={params.data_dir} \
           {params.dbs} {params.is_prok} \
           2> {log} 1>&2
+        touch {output} 2>> {log}
         """
 
 def _open(infile, mode='rb'):
@@ -184,8 +193,10 @@ def af_predict_time(wildcards, input, attempt):
         seq_len = get_seq_len(input.faa)
         t = seq_len * 0.7103 - 184.15
         t = t ** (1 + attempt ** 2 / 10.0)
+        if config['params']['db_preset'] == 'full_dbs':
+            t *= 1.1
         t = 59 if t < 59 else t
-        t = 20160 if t > 20160 else t
+        t = 20160 if t > 20160 else t            
         return int(round(t,0))
     else:
         return attempt ** 2 * 60 * 24
@@ -216,7 +227,8 @@ rule af_predict:
     input:
         faa = lambda wildcards: config['samples'].loc[wildcards.sample,'Fasta'],
         u90 = af_dir + '{sample}/msas/uniref90_hits.sto',
-        mgf = af_dir + '{sample}/msas/mgnify_hits.sto'
+        mgf = af_dir + '{sample}/msas/mgnify_hits.sto',
+        jsn = af_dir + '{sample}/msas/chain_id_map.json'
     output:
         pkl = af_dir + '{sample}/features.pkl',
         rnk0 = af_dir + '{sample}/ranked_0.pdb',
