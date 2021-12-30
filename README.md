@@ -14,6 +14,9 @@ Simple snakemake pipeline for each scaling of
 
 This snakemake pipeline handles the software install and cluster job submission/tracking.
 
+> Note: the pipeline was designed and tested for an SGE cluster.
+You may need to adapt the pipeline somewhat to work on other clusters or cloud computing services.
+
 For failed cluster jobs, job resources are automatically escalated in an attempt
 to successfully complete the job, assuming that the job died due to a lack of cluster resources (eg., a lack of memory).
 
@@ -24,7 +27,7 @@ Alphafold is run as 2 parts:
   * All subprocesses will use the same number of CPUs
     * Unlike with the original alphafold code
 * Prediction of protein structures
-  * GPU usage recommended
+  * GPU usage recommended (used by default)
 
 To do this, the pipeline utilizes a
 [modified version of alphafold](https://github.com/nick-youngblut/alphafold).
@@ -112,7 +115,16 @@ The `config.yaml` file sets the parameters for the pipeline.
 
 ## Output
 
-See [the alphafold docs](https://github.com/deepmind/alphafold#alphafold-output)
+For general info on alphafold output, see [the alphafold docs](https://github.com/deepmind/alphafold#alphafold-output).
+
+### mTM-align
+
+mTM-align is used for 2 sets of comparisons:
+
+* Intra
+  * The `ranked_[0-9].pdb` structures are compared per-sample
+* Inter
+  * The `ranked_0.pdb` structures are compared between samples
 
 
 # TODO
