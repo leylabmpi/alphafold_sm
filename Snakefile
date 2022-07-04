@@ -82,10 +82,10 @@ include: snake_dir + 'bin/align/Snakefile'
 def which_all(wildcards):
     F = []
     # predictions
-    F += expand(af_dir + '{sample}/features.pkl',
+    F += expand(A(af_dir + '{sample}/features.pkl'),
                 sample = config['samples'].Sample)
     for i in range(5):
-        F += expand(af_dir + '{{sample}}/ranked_{}.pdb'.format(i),
+        F += expand(A(af_dir + '{{sample}}/ranked_{}.pdb'.format(i)),
                     sample = config['samples'].Sample)
     # alignents
     ## intra

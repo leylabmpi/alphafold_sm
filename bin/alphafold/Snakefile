@@ -230,13 +230,13 @@ rule af_predict:
         mgf = af_dir + '{sample}/msas/mgnify_hits.sto',
         jsn = af_dir + '{sample}/msas/chain_id_map.json'
     output:
-        pkl = af_dir + '{sample}/features.pkl',
-        rnk0 = af_dir + '{sample}/ranked_0.pdb',
-        rnk1 = af_dir + '{sample}/ranked_1.pdb',
-        rnk2 = af_dir + '{sample}/ranked_2.pdb',
-        rnk3 = af_dir + '{sample}/ranked_3.pdb',
-        rnk4 = af_dir + '{sample}/ranked_4.pdb',
-        tim = af_dir + '{sample}/timings.json'
+        pkl = A(af_dir + '{sample}/features.pkl'),
+        rnk0 = A(af_dir + '{sample}/ranked_0.pdb'),
+        rnk1 = A(af_dir + '{sample}/ranked_1.pdb'),
+        rnk2 = A(af_dir + '{sample}/ranked_2.pdb'),
+        rnk3 = A(af_dir + '{sample}/ranked_3.pdb'),
+        rnk4 = A(af_dir + '{sample}/ranked_4.pdb'),
+        tim = A(af_dir + '{sample}/timings.json')
     params:
         exe = config['pipeline']['script_folder'] + 'alphafold/run_alphafold.py',
         sample = lambda wildcards : wildcards.sample,
